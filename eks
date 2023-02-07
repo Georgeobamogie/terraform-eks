@@ -1,0 +1,48 @@
+provider "aws" {
+  version = "2.68.0"
+  region  = "us-west-2"
+}
+
+module "eks" {
+  source = "terraform-aws-modules/eks/aws"
+
+  cluster_name = "example-eks-cluster"
+  #figures given below for subnets and vpcs are examples
+  subnets      = ["subnet-0123456789abcdef0", "subnet-0123456789abcdef1", "subnet-0123456789abcdef2"]
+  vpc_id       = "vpc-0123456789abcdef0"
+
+  tags = {
+    Terraform   = "true"
+    Environment = "example-eks-cluster"
+  }
+}
+
+module "k8s_provider" {
+  source = "terraform-providers/kubernetes/helm"
+  version = "0.12.1"
+}
+
+module "nginx-ingress" {
+  source = "helm.sh/nginx-ingress-controller"
+  version = "2.3.0"
+
+  client_service_type = "ClusterIP"
+  controller_service_type = "LoadBalancer"
+}
+
+module "my_app" {
+  source = "./my_app_module"
+
+  namespace = "my-app"
+  ingress_enabled = "true"
+}
+
+resource "kubernetes_manifest" "my_app" {
+  depends_on = [module.my_app]
+
+  manifests = module.my_app.manifests
+}
+
+output "kubeconfig" {
+  value = module.eks.kubeconfig
+}
